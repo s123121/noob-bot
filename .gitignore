@@ -1,0 +1,20 @@
+# OSX
+#
+.DS_Store
+
+# Generated files
+bin/
+gen/
+out/
+
+# node.js
+#
+dist/
+node_modules/
+npm-debug.log
+yarn-error.log
+
+upload/*
+
+.env
+.env.*

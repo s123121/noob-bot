@@ -1,0 +1,21 @@
+{
+  "type": "module",
+  "scripts": {
+    "format:check": "prettier --check .",
+    "format:write": "prettier --write .",
+    "lint:check": "eslint .",
+    "lint:fix": "eslint --fix ."
+ },
+  "dependencies": {
+    "@truffle/hdwallet-provider": "^2.1.13",
+    "axios": "^1.4.0",
+    "dotenv": "^16.3.1",
+    "web3": "^4.0.3"
+  },
+  "devDependencies": {
+    "eslint": "^8.0.1",
+    "eslint-config-prettier": "^9.0.0",
+    "eslint-plugin-import": "^2.25.2",
+    "prettier": "^3.0.2"
+  }
+}
