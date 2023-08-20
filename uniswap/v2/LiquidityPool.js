@@ -96,6 +96,7 @@ class LiquidityPool {
       }
     }
     this.updateReserves({ silent: true })
+    this.isInit = true
   }
 
   calculateTokensInAtRatioOut() {
@@ -104,7 +105,7 @@ class LiquidityPool {
     if (this._ratioToken0In) {
       this.token0MaxSwap = Math.max(
         0,
-        (this.reservesToken1 * this._ratioToken0In) - this.reservesToken0 / (1 - this.feeToken0),
+        this.reservesToken1 * this._ratioToken0In - this.reservesToken0 / (1 - this.feeToken0),
       )
     } else {
       this.token0MaxSwap = 0
@@ -197,3 +198,31 @@ class LiquidityPool {
 }
 
 export default LiquidityPool
+
+export const getLiquidityPool = async ({
+  address,
+  router,
+  name,
+  tokens,
+  updateMethod = 'polling',
+  abi = uniswapV2PoolAbi,
+  provider,
+  fee = 0.003,
+  feeToken0,
+  feeToken1,
+}) => {
+  const pool = new LiquidityPool({
+    address,
+    router,
+    name,
+    tokens,
+    updateMethod,
+    abi,
+    provider,
+    fee,
+    feeToken0,
+    feeToken1,
+  })
+  await pool.init()
+  return pool
+}

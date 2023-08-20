@@ -5,7 +5,7 @@
     "format:write": "prettier --write .",
     "lint:check": "eslint .",
     "lint:fix": "eslint --fix ."
- },
+  },
   "dependencies": {
     "@truffle/hdwallet-provider": "^2.1.13",
     "axios": "^1.4.0",
@@ -16,6 +16,8 @@
     "eslint": "^8.0.1",
     "eslint-config-prettier": "^9.0.0",
     "eslint-plugin-import": "^2.25.2",
+    "eslint-plugin-node": "^11.1.0",
+    "eslint-plugin-prettier": "^5.0.0",
     "prettier": "^3.0.2"
   },
   "license": "MIT"

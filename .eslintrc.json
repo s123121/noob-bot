@@ -3,15 +3,18 @@
     "node": true,
     "es2021": true
   },
-  "extends": ["eslint:recommended", "prettier"],
+  "plugins": ["prettier"],
+  "extends": ["eslint:recommended", "plugin:node/recommended", "prettier"],
   "parserOptions": {
     "ecmaVersion": "latest",
     "sourceType": "module"
   },
   "rules": {
+    "prettier/prettier": "error",
+    "node/no-missing-import": "error",
     "no-unused-vars": "off",
-    "no-undef": "off",
     "no-console": "off",
-    "no-constant-condition": "off"
+    "no-constant-condition": "off",
+    "no-process-exit": "off"
   }
 }
