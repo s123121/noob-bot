@@ -2,84 +2,106 @@
 // Tells the Solidity compiler to compile only from v0.8.13 to v0.9.0
 pragma solidity ^0.8.13;
 
-import './interfaces/IUniswapV2Router.sol';
 import './interfaces/IERC20.sol';
-import './interfaces/IUniswapV2Router.sol';
 import './interfaces/IUniswapV2Callee.sol';
 import './interfaces/IUniswapV2Pair.sol';
+import './interfaces/IJoeCallee.sol';
 
 contract FlashBorrow {
-  uint256 public constant deadline = 60;
-  address public sushiswapFactoryAddress;
-  address public sushiswapRouterAddress;
   address public flashBorrowPoolAddress;
-  address[] public swapPath;
-  IUniswapV2Router public swapRouter;
-  event ValueChanged(uint256 newValue);
+  address private _owner;
+  uint256[2] public flashBorrowTokenAmounts;
+  uint256 public flashRepayTokenAmount;
+  address[] public swapPoolAddresses;
+  uint256[2][] public swapPoolAmounts;
 
-  constructor(address _sushiswapFactoryAddress, address _sushiswapRouterAddress) {
-    sushiswapFactoryAddress = _sushiswapFactoryAddress;
-    sushiswapRouterAddress = _sushiswapRouterAddress;
+  modifier isOwner() {
+    require(msg.sender == _owner, 'Caller is not owner');
+    _; // continue executing rest of method body
+  }
+
+  constructor() {
+    _owner = msg.sender;
   }
 
   function execute(
     address _flashBorrowPoolAddress,
-    address flashBorrowTokenAddress,
-    uint256 flashBorrowTokenAmount,
-    address[] calldata _swapPath,
-    address swapRouterAddress
-  ) external {
-    emit ValueChanged(0);
-    swapPath = _swapPath;
+    uint256[2] calldata _flashBorrowTokenAmount,
+    uint256 _flashRepayTokenAmount,
+    address[] calldata _swapPoolAddresses,
+    uint256[2][] calldata _swapPoolAmounts
+  ) external isOwner {
     flashBorrowPoolAddress = _flashBorrowPoolAddress;
-    emit ValueChanged(1);
-    swapRouter = IUniswapV2Router(swapRouterAddress);
-    emit ValueChanged(2);
-    uint256 approval = IERC20(flashBorrowTokenAddress).allowance(address(this), swapRouterAddress);
-    emit ValueChanged(3);
-    if (approval < flashBorrowTokenAmount) {
-      IERC20(flashBorrowTokenAddress).approve(swapRouterAddress, type(uint256).max);
-    }
-    emit ValueChanged(4);
-    uint256 amount0 = 0;
-    uint256 amount1 = 0;
-    if (flashBorrowTokenAddress == IUniswapV2Pair(_flashBorrowPoolAddress).token0()) {
-      amount0 = flashBorrowTokenAmount;
-    } else {
-      amount1 = flashBorrowTokenAmount;
-    }
+    flashBorrowTokenAmounts = _flashBorrowTokenAmount;
+    flashRepayTokenAmount = _flashRepayTokenAmount;
+    swapPoolAddresses = _swapPoolAddresses;
+    swapPoolAmounts = _swapPoolAmounts;
 
-    IUniswapV2Pair(_flashBorrowPoolAddress).swap(amount0, amount1, address(this), bytes('flash'));
+    IUniswapV2Pair(_flashBorrowPoolAddress).swap(
+      flashBorrowTokenAmounts[0],
+      flashBorrowTokenAmounts[1],
+      address(this),
+      bytes('flash')
+    );
+
+    //  try this one weird trick to save gas
+    flashBorrowPoolAddress = address(0);
+    // flashBorrowTokenAmounts = [];
+    flashRepayTokenAmount = 0;
+    // swapPoolAddresses = [];
+    // swapPoolAmounts = [];
   }
 
-  function uniswapV2Call(address _sender, uint256 _amount0, uint256 _amount1, bytes calldata _data) external {
-    address token0 = IUniswapV2Pair(msg.sender).token0();
-    address token1 = IUniswapV2Pair(msg.sender).token1();
-    uint256 amountBorrow = 0;
-    address[] memory path = new address[](2);
-    if (_amount0 > 0) {
-      amountBorrow = _amount0;
-      path[0] = token1;
-      path[1] = token0;
-    } else {
-      amountBorrow = _amount1;
-      path[0] = token0;
-      path[1] = token1;
+  function joeCall(address _sender, uint256 _amount0, uint256 _amount1, bytes calldata _data) external {
+    require(msg.sender == flashBorrowPoolAddress, 'Not LP');
+    address token0Address = IUniswapV2Pair(msg.sender).token0();
+    address token1Address = IUniswapV2Pair(msg.sender).token1();
+
+    //  transfer the borrowed token to the first LP
+    if (_amount0 == 0) {
+      IERC20(token1Address).transfer(swapPoolAddresses[0], _amount1);
     }
-    uint256 amountRepay = swapRouter.getAmountsIn(amountBorrow, path)[0];
-    uint256 amountReceivedAfterSwap = swapRouter.swapExactTokensForTokens(
-      amountBorrow,
-      amountRepay,
-      path,
-      address(this),
-      block.timestamp + deadline
-    )[path.length - 1];
-    if (_amount0 > 0) {
-      IERC20(token1).transfer(msg.sender, amountRepay);
-      IERC20(token1).transfer(tx.origin, amountReceivedAfterSwap - amountRepay);
-    } else {
-      IERC20(token0).transfer(msg.sender, amountRepay);
-      IERC20(token0).transfer(tx.origin, amountReceivedAfterSwap - amountRepay);
+
+    if (_amount1 == 0) {
+      IERC20(token0Address).transfer(swapPoolAddresses[0], _amount0);
     }
+
+    uint256 numberOfPools = swapPoolAddresses.length;
+
+    // loop through the LP addresses, calling swap() directly using the submitted amounts. Transfers the output from
+    // each swap to the next LP in the array. When we reach the last LP in the array, transfer the token back to
+    // the contract and break the loop
+    for (uint256 i = 0; i < 16; i++) {
+      if (i < numberOfPools - 1) {
+        IUniswapV2Pair(swapPoolAddresses[i]).swap(
+          swapPoolAmounts[i][0],
+          swapPoolAmounts[i][1],
+          swapPoolAddresses[i + 1],
+          bytes('')
+        );
+      } else if (i == numberOfPools - 1) {
+        IUniswapV2Pair(swapPoolAddresses[i]).swap(
+          swapPoolAmounts[i][0],
+          swapPoolAmounts[i][1],
+          address(this),
+          bytes('')
+        );
+      } else {
+        break;
+      }
+    }
+
+    // repay the flash loan
+    if (_amount0 == 0) {
+      IERC20(token0Address).transfer(msg.sender, flashRepayTokenAmount);
+    }
+
+    if (_amount1 == 0) {
+      IERC20(token1Address).transfer(msg.sender, flashRepayTokenAmount);
+    }
+  }
+
+  function withdraw(address tokenAddress) external isOwner {
+    IERC20(tokenAddress).transfer(msg.sender, IERC20(tokenAddress).balanceOf(address(this)) - 1);
   }
 }

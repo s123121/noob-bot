@@ -117,7 +117,6 @@ class LiquidityPool {
         0,
         Number(this.reservesToken0 * this._ratioToken1In) - Number(this.reservesToken1 / (1 - this.feeToken1)),
       )
-      console.log(this._ratioToken1In, this.reservesToken0, this.reservesToken1, this.feeToken1, (this.reservesToken0 * this._ratioToken1In) - this.reservesToken1 / (1 - this.feeToken1), 'hjhehehehe')
     }
   }
 
