@@ -1,3 +1,7 @@
 {
-  "type": "commonjs"
+  "type": "commonjs",
+  "scripts": {
+    "ganache:avax": "ganache --fork \"https://avalanche-mainnet.infura.io/v3/$INFURA_PROJECT_ID\""
+  },
+  "license": "MIT"
 }

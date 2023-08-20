@@ -17,5 +17,6 @@
     "eslint-config-prettier": "^9.0.0",
     "eslint-plugin-import": "^2.25.2",
     "prettier": "^3.0.2"
-  }
+  },
+  "license": "MIT"
 }
