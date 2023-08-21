@@ -2,16 +2,7 @@ import ERC20Token, { getERC20Token } from '../model/ERC20'
 import LiquidityPool, { getLiquidityPool } from '../uniswap/v2/LiquidityPool'
 
 class FlashBorrowToLpSwap {
-  constructor({
-    borrowPool,
-    borrowToken,
-    provider,
-    swapFactoryAddress,
-    swapTokenAddresses,
-    swapRouterFee,
-    name,
-    updateMethod = 'polling',
-  }) {
+  constructor({ borrowPool, borrowToken, swapTokenAddresses, name, updateMethod = 'polling' }) {
     if (borrowToken.address != swapTokenAddresses[0]) {
       throw new Error('Token addresses must begin with the borrowed token')
     }
@@ -104,94 +95,58 @@ class FlashBorrowToLpSwap {
     return false
   }
 
-  // def _calculate_arbitrage(self):
-  //   # set up the boundaries for the Brent optimizer based on which token is being borrowed
-  //   if self.borrow_token.address == self.borrow_pool.token0.address:
-  //       bounds = (
-  //           1,
-  //           float(self.borrow_pool.reserves_token0),
-  //       )
-  //       bracket = (
-  //           0.01 * self.borrow_pool.reserves_token0,
-  //           0.05 * self.borrow_pool.reserves_token0,
-  //       )
-  //   else:
-  //       bounds = (
-  //           1,
-  //           float(self.borrow_pool.reserves_token1),
-  //       )
-  //       bracket = (
-  //           0.01 * self.borrow_pool.reserves_token1,
-  //           0.05 * self.borrow_pool.reserves_token1,
-  //       )
-
-  //   opt = optimize.minimize_scalar(
-  //       lambda x: -float(
-  //           self.calculate_multipool_tokens_out_from_tokens_in(
-  //               token_in=self.borrow_token,
-  //               token_in_quantity=x,
-  //           )
-  //           - self.borrow_pool.calculate_tokens_in_from_tokens_out(
-  //               token_in=self.repay_token,
-  //               token_out_quantity=x,
-  //           )
-  //       ),
-  //       method="bounded",
-  //       bounds=bounds,
-  //       bracket=bracket,
-  //   )
-
-  //   best_borrow = int(opt.x)
-
-  //   if self.borrow_token.address == self.borrow_pool.token0.address:
-  //       borrow_amounts = [best_borrow, 0]
-  //   elif self.borrow_token.address == self.borrow_pool.token1.address:
-  //       borrow_amounts = [0, best_borrow]
-  //   else:
-  //       print("wtf?")
-  //       raise Exception
-
-  //   best_repay = self.borrow_pool.calculate_tokens_in_from_tokens_out(
-  //       token_in=self.repay_token,
-  //       token_out_quantity=best_borrow,
-  //   )
-  //   best_profit = -int(opt.fun)
-
-  //   # only save opportunities with rational, positive values
-  //   if best_borrow > 0 and best_profit > 0:
-  //       self.best.update(
-  //           {
-  //               "borrow_amount": best_borrow,
-  //               "borrow_pool_amounts": borrow_amounts,
-  //               "repay_amount": best_repay,
-  //               "profit_amount": best_profit,
-  //               "swap_pool_amounts": self._build_multipool_amounts_out(
-  //                   token_in=self.borrow_token,
-  //                   token_in_quantity=best_borrow,
-  //               ),
-  //           }
-  //       )
-  //   else:
-  //       self.best.update(
-  //           {
-  //               "borrow_amount": 0,
-  //               "borrow_pool_amounts": [],
-  //               "repay_amount": 0,
-  //               "profit_amount": 0,
-  //               "swap_pool_amounts": [],
-  //           }
-  //       )
-
   _calculateArbitrage() {
     //  set up the boundaries for the Brent optimizer based on which token is being borrowed
     let bounds
-    let bracket
     if (this.borrowToken == this.borrowPool.token0.address) {
       bounds = [1, this.borrowPool.reservesToken0]
-      bracket = [0.01 * this.borrowPool.reservesToken0, 0.05 * this.borrowPool.reservesToken0]
     } else {
       bounds = [1, this.borrowPool.reservesToken1]
-      bracket = [0.01 * this.borrowPool.reservesToken1, 0.05 * this.borrowPool.reservesToken1]
+    }
+    const func = (x) =>
+      -(
+        this.calculateMultipoolTokensOutFromTokensIn({ tokenIn: this.borrowToken, tokenInQuantity: x }) -
+        this.borrowPool.calculateTokensInFromTokensOut({ tokenIn: this.repayToken, tokenOutQuantity: x })
+      )
+    const bestBorrow = Math.round(brent(func, bounds[0], bounds[1], 0.001, 500))
+
+    let borrowAmounts
+    if (this.borrowToken.address == this.borrowPool.token0.address) {
+      borrowAmounts = [bestBorrow, 0]
+    } else if (this.borrowToken.address == this.borrowPool.token1.address) {
+      borrowAmounts = [0, bestBorrow]
+    } else {
+      throw new Error('wtf?')
+    }
+
+    const bestRepay = this.borrowPool.calculateTokensInFromTokensOut({
+      tokenIn: this.repayToken,
+      tokenOutQuantity: bestBorrow,
+    })
+
+    const bestProfit = -func(bestBorrow)
+    // only save opportunities with rational, positive values
+    if (bestBorrow > 0 && bestProfit > 0) {
+      this.best = {
+        ...this.best,
+        borrowAmount: bestBorrow,
+        borrowPoolAmounts: borrowAmounts,
+        repayAmount: bestRepay,
+        profitAmount: bestProfit,
+        swapPoolAmounts: this._buildMultipoolAmountsOut({
+          tokenIn: this.borrowToken,
+          tokenInQuantity: bestBorrow,
+        }),
+      }
+    } else {
+      this.best = {
+        ...this.best,
+        borrowAmount: 0,
+        borrowPoolAmounts: [],
+        repayAmount: 0,
+        profitAmount: 0,
+        swapPoolAmounts: [],
+      }
     }
   }
 
@@ -221,4 +176,68 @@ class FlashBorrowToLpSwap {
 
     return tokenOutQuantity
   }
+
+  _buildMultipoolAmountsOut({ tokenIn, tokenInQuantity, silent }) {
+    const numberOfPools = this.swapPools.length
+    let poolAmountsOut = []
+    for (let i = 0; i < numberOfPools; i++) {
+      let tokenOut
+      if (tokenIn.address == this.swapPools[i].token0.address) {
+        tokenOut = this.swapPools[i].token1
+      } else if (tokenIn.address == this.swapPools[i].token1.address) {
+        tokenOut = this.swapPools[i].token0
+      } else {
+        throw new Error('wtf?')
+      }
+      let tokenOutQuantity = this.swapPools[i].calculateTokensOutFromTokensIn({
+        tokenIn,
+        tokenInQuantity,
+      })
+      if (tokenIn.address == this.swapPools[i].token0.address) {
+        poolAmountsOut.push([0, tokenOutQuantity])
+      } else if (tokenIn.address == this.swapPools[i].token1.address) {
+        poolAmountsOut.push([tokenOutQuantity, 0])
+      }
+      if (i == numberOfPools - 1) {
+        break
+      } else {
+        tokenIn = tokenOut
+        tokenInQuantity = tokenOutQuantity
+      }
+    }
+
+    return poolAmountsOut
+  }
+}
+
+export const getFlashBorrowToLpSwap = async ({
+  borrowPool,
+  borrowToken,
+  provider,
+  swapFactoryAddress,
+  swapFactoryAbi,
+  swapTokenAddresses,
+  swapRouterFee,
+  name,
+  updateMethod = 'polling',
+}) => {
+  const flashBorrowToLpSwap = new FlashBorrowToLpSwap({
+    borrowPool,
+    borrowToken,
+    provider,
+    swapFactoryAddress,
+    swapTokenAddresses,
+    swapRouterFee,
+    name,
+    updateMethod,
+  })
+  await flashBorrowToLpSwap.init({
+    provider,
+    abi: swapFactoryAbi,
+    address: swapFactoryAddress,
+    swapRouterFee,
+    swapTokenAddresses,
+    updateMethod,
+  })
+  return flashBorrowToLpSwap
 }

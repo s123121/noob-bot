@@ -1,4 +1,5 @@
 import { strict as assert } from 'node:assert'
+import axios from 'axios'
 import { SLIPPAGE, DRY_RUN, SECOND } from './constants.js'
 
 const accountGetBalance = async (account) => {
@@ -16,10 +17,10 @@ const getAbi = async (address) => {
   return abi
 }
 
-const contractLoad = async (address, proxyAddress, alias) => {
+const contractLoad = async (address, proxyAddress, provider) => {
   try {
     const abi = await getAbi(proxyAddress || address)
-    const contract = new web3.eth.Contract(abi, address)
+    const contract = new provider.eth.Contract(abi, address)
     return contract
   } catch (e) {
     console.log(`Exception in contract_load: ${e}`)
@@ -71,14 +72,14 @@ const getTokenDecimals = async (token) => {
   }
 }
 
-const tokenApprove = async (token, router, value = 'unlimited') => {
+const tokenApprove = async (token, router, value = 'unlimited', userAddress) => {
   if (DRY_RUN) {
     return true
   }
 
   if (value === 'unlimited') {
     try {
-      await token.methods.approve(router._address, 2 ** 256 - 1).send({ from: user })
+      await token.methods.approve(router._address, 2 ** 256 - 1).send({ from: userAddress })
       return true
     } catch (e) {
       console.log(`Exception in token_approve: ${e}`)
@@ -86,7 +87,7 @@ const tokenApprove = async (token, router, value = 'unlimited') => {
     }
   } else {
     try {
-      await token.methods.approve(router._address, value).send({ from: user })
+      await token.methods.approve(router._address, value).send({ from: userAddress })
       return true
     } catch (e) {
       console.log(`Exception in token_approve: ${e}`)
@@ -104,7 +105,15 @@ const getSwapRate = async (tokenInQuantity, tokenInAddress, tokenOutAddress, rou
   }
 }
 
-const tokenSwap = async (tokenInQuantity, tokenInAddress, tokenOutQuantity, tokenOutAddress, router, priorityFee) => {
+const tokenSwap = async (
+  tokenInQuantity,
+  tokenInAddress,
+  tokenOutQuantity,
+  tokenOutAddress,
+  router,
+  priorityFee,
+  userAddress,
+) => {
   if (DRY_RUN) {
     return true
   }
@@ -120,10 +129,10 @@ const tokenSwap = async (tokenInQuantity, tokenInAddress, tokenOutQuantity, toke
         tokenInQuantity,
         parseInt(tokenOutQuantity * (1 - SLIPPAGE)),
         [tokenInAddress, tokenOutAddress],
-        user.address,
+        userAddress,
         parseInt(1000 * (Date.now() / 1000) + 30 * SECOND),
       )
-      .send({ from: user, maxPriorityFeePerGas: priorityFee })
+      .send({ from: userAddress, maxPriorityFeePerGas: priorityFee })
     return true
   } catch (e) {
     console.log(`Exception: ${e}`)
