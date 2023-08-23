@@ -271,6 +271,15 @@ class LiquidityPoolV2 {
 
     return success
   }
+
+  getPoolRatio = () => {
+    return {
+      [`${this.token0.symbol}-${this.token1.symbol}`]:
+        this.reservesToken0 / 10 ** this.token0.decimals / (this.reservesToken1 / 10 ** this.token1.decimals),
+      [`${this.token1.symbol}-${this.token0.symbol}`]:
+        this.reservesToken1 / 10 ** this.token1.decimals / (this.reservesToken0 / 10 ** this.token0.decimals),
+    }
+  }
 }
 
 export default LiquidityPoolV2
