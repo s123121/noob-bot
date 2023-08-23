@@ -69,7 +69,7 @@ class FlashBorrowToLpSwap {
     }
   }
 
-  updateReserves({ silent = false, printReserves = true, printRatios = true }) {
+  async updateReserves({ silent = false, printReserves = true, printRatio = true }) {
     //     Checks each liquidity pool for updates by passing a call to .update_reserves(), which returns False if there are no updates.
     //     Will calculate arbitrage amounts only after checking all pools and finding an update, or on startup (via the 'init' dictionary key)
     let recalculate = false
@@ -81,19 +81,18 @@ class FlashBorrowToLpSwap {
     }
 
     // flag for recalculation if the borrowing pool has been updated
-    if (this.borrowPool.updateReserves({ silent, printReserves, printRatios })) {
-      recalculate = true
-    }
+    recalculate = await this.borrowPool.updateReserves({ silent, printReserves, printRatio })
 
     // flag for recalculation if any of the pools along the swap path have been updated
     for (const pool of this.swapPools) {
-      if (pool.updateReserves({ silent, printReserves, printRatios })) {
+      const poolUpdated = await pool.updateReserves({ silent, printReserves, printRatio })
+      if (poolUpdated) {
         recalculate = true
       }
     }
 
     if (recalculate) {
-      this._calculateArbitrage()
+      // this._calculateArbitrage()
       return true
     }
     return false

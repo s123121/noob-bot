@@ -102,7 +102,7 @@ const main = async () => {
       }
     }
     for (const lp of lps) {
-      await lp.updateReserves({ printReserves: true })
+      await lp.updateReserves({ printReserves: true, printRatio: true })
       if (lp.token0.balance && lp.token0MaxSwap) {
         const tokenIn = lp.token0
         const tokenOut = lp.token1

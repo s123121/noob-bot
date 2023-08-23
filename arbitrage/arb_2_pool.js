@@ -134,7 +134,7 @@ const main = async () => {
   while (true) {
     const start = Date.now()
     for (const arb of arbs) {
-      arb.updateReserves({ silent: true, printReserves: false })
+      await arb.updateReserves({ silent: false, printReserves: false, printRatio: true })
       if (arb.best.borrowAmount) {
         const arbProfitUsd = (arb.best.profitAmount / 10 ** arb.best.profitToken.decimals) * arb.best.profitToken.price
         console.log(
