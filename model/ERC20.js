@@ -18,7 +18,7 @@ class ERC20Token {
       this._contract = new provider.eth.Contract(standardAbi, address)
     }
     if (oracleAddress) {
-      this._price_oracle = new ChainlinkPriceContract(oracleAddress, provider)
+      this._price_oracle = new ChainlinkPriceContract({ address: oracleAddress, provider })
     }
     // this.getTokenInfo();
   }
@@ -60,7 +60,7 @@ class ERC20Token {
     this.name = name
     this.balance = Number(balance)
     this.isInit = true
-    console.log('Token info: ', this.symbol, this.decimals, this.name)
+    // console.log('Token info: ', this.symbol, this.decimals, this.name)
   }
 
   async getBalance() {
@@ -75,7 +75,7 @@ class ERC20Token {
   }
 
   async getPrice() {
-    this.price = await this._price_oracle.update_price()
+    this.price = await this._price_oracle.updatePrice()
     return this.price
   }
 }

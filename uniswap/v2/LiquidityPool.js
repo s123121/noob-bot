@@ -1,7 +1,8 @@
 import { strict as assert } from 'node:assert'
 import { uniswapV2PoolAbi } from '../../abi/index.js'
 
-class LiquidityPool {
+class LiquidityPoolV2 {
+  version = 2
   constructor({
     address,
     router,
@@ -121,14 +122,89 @@ class LiquidityPool {
     }
   }
 
-  calculateTokensOutFromTokensIn({ tokenIn, tokenInQuantity, fee }) {
-    assert(tokenIn == this.token0 || tokenIn == this.token1)
-    if (tokenIn == this.token0) {
-      return (this.reservesToken1 * tokenInQuantity * (1 - fee)) / (this.reservesToken0 + tokenInQuantity * (1 - fee))
+  calculateTokensOutFromTokensIn({ tokenIn, tokenOut, tokenInQuantity }) {
+    let reserveIn
+    let fee
+    let reserveOut
+    if (tokenIn) {
+      if (![this.token0.address, this.token1.address].includes(tokenIn.address)) {
+        throw new Error(
+          `Could not identify token_in: ${tokenIn.symbol}! This pool holds: ${this.token0.symbol} ${this.token1.symbol}`,
+        )
+      }
+      if (tokenIn.address == this.token0.address) {
+        reserveIn = this.reservesToken0
+        fee = this.feeToken0
+        reserveOut = this.reservesToken1
+      } else if (tokenIn.address == this.token1.address) {
+        reserveIn = this.reservesToken1
+        fee = this.feeToken1
+        reserveOut = this.reservesToken0
+      }
+    } else if (tokenOut) {
+      if (![this.token0.address, this.token1.address].includes(tokenOut.address)) {
+        throw new Error(
+          `Could not identify token_out: ${tokenOut.symbol}! This pool holds: ${this.token0.symbol} ${this.token1.symbol}`,
+        )
+      }
+      if (tokenOut.address == this.token0.address) {
+        reserveIn = this.reservesToken1
+        fee = this.feeToken1
+        reserveOut = this.reservesToken0
+      } else if (tokenOut.address == this.token1.address) {
+        reserveIn = this.reservesToken0
+        fee = this.feeToken0
+        reserveOut = this.reservesToken1
+      }
     }
-    if (tokenIn == this.token1) {
-      return (this.reservesToken0 * tokenInQuantity * (1 - fee)) / (this.reservesToken1 + tokenInQuantity * (1 - fee))
+    const amountInWithFee = tokenInQuantity * (1 - fee)
+    const numerator = amountInWithFee * reserveOut
+    const denominator = reserveIn + amountInWithFee
+    return Math.round(numerator / denominator)
+  }
+
+  calculateTokensInFromTokensOut({ tokenIn, tokenOut, tokenOutQuantity }) {
+    let reserveIn
+    let fee
+    let reserveOut
+    if (tokenIn) {
+      if (![this.token0.address, this.token1.address].includes(tokenIn.address)) {
+        throw new Error(
+          `Could not identify token_in: ${tokenIn.symbol}! This pool holds: ${this.token0.symbol} ${this.token1.symbol}`,
+        )
+      }
+      if (tokenIn.address == this.token0.address) {
+        reserveIn = this.reservesToken0
+        fee = this.feeToken0
+        reserveOut = this.reservesToken1
+      } else if (tokenIn.address == this.token1.address) {
+        reserveIn = this.reservesToken1
+        fee = this.feeToken1
+        reserveOut = this.reservesToken0
+      }
+    } else if (tokenOut) {
+      if (![this.token0.address, this.token1.address].includes(tokenOut.address)) {
+        throw new Error(
+          `Could not identify token_out: ${tokenOut.symbol}! This pool holds: ${this.token0.symbol} ${this.token1.symbol}`,
+        )
+      }
+      if (tokenOut.address == this.token0.address) {
+        reserveIn = this.reservesToken1
+        fee = this.feeToken1
+        reserveOut = this.reservesToken0
+      } else if (tokenOut.address == this.token1.address) {
+        reserveIn = this.reservesToken0
+        fee = this.feeToken0
+        reserveOut = this.reservesToken1
+      }
     }
+    if (tokenOutQuantity > reserveOut - 1) {
+      throw new Error(`Requested amount out (${tokenOutQuantity}) >= pool reserves (${reserveOut})`)
+    }
+
+    const numerator = reserveIn * tokenOutQuantity
+    const denominator = (reserveOut - tokenOutQuantity) * (1 - fee)
+    return Math.round(numerator / denominator) + 1
   }
 
   async setSwapTarget({ tokenIn, tokenInQty, tokenOut, tokenOutQty, silent }) {
@@ -188,8 +264,8 @@ class LiquidityPool {
         } else {
           success = false
         }
-      } catch (e) {
-        throw new Error(`LiquidityPool: Exception in update_reserves (polling): ${e}`)
+      } catch (err) {
+        throw new Error(`LiquidityPool: Exception in update_reserves (polling): ${err?.message}`)
       }
     }
 
@@ -197,7 +273,7 @@ class LiquidityPool {
   }
 }
 
-export default LiquidityPool
+export default LiquidityPoolV2
 
 export const getLiquidityPool = async ({
   address,
@@ -211,7 +287,7 @@ export const getLiquidityPool = async ({
   feeToken0,
   feeToken1,
 }) => {
-  const pool = new LiquidityPool({
+  const pool = new LiquidityPoolV2({
     address,
     router,
     name,

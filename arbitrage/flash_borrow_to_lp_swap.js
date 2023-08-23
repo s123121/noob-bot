@@ -1,5 +1,6 @@
-import ERC20Token, { getERC20Token } from '../model/ERC20'
-import LiquidityPool, { getLiquidityPool } from '../uniswap/v2/LiquidityPool'
+import { getERC20Token } from '../model/ERC20.js'
+import { getLiquidityPool } from '../uniswap/v2/LiquidityPool.js'
+import { localMinimum } from '../utils/brent.js'
 
 class FlashBorrowToLpSwap {
   constructor({ borrowPool, borrowToken, swapTokenAddresses, name, updateMethod = 'polling' }) {
@@ -7,7 +8,7 @@ class FlashBorrowToLpSwap {
       throw new Error('Token addresses must begin with the borrowed token')
     }
 
-    if (borrowPool.token0.address == borrowToken) {
+    if (borrowPool.token0.address == borrowToken.address) {
       if (borrowPool.token1.address != swapTokenAddresses[swapTokenAddresses.length - 1]) {
         throw new Error('Token addresses must end with the repaid token')
       }
@@ -20,15 +21,17 @@ class FlashBorrowToLpSwap {
     this.name = name
     this.borrowPool = borrowPool
     this.borrowToken = borrowToken
-    if (this.borrowToken == this.borrowPool.token0.address) {
-      this.repayToken = this.borrowPool.token1.address
-    } else if (this.borrowToken == this.borrowPool.token1.address) {
-      this.repayToken = this.borrowPool.token0.address
+    if (this.borrowToken.address == this.borrowPool.token0.address) {
+      this.repayToken = this.borrowPool.token1
+    } else if (this.borrowToken.address == this.borrowPool.token1.address) {
+      this.repayToken = this.borrowPool.token0
     }
   }
 
-  async init({ provider, abi, address, swapRouterFee, swapTokenAddresses, updateMethod = 'polling' }) {
-    this.tokens = await Promise.all(swapTokenAddresses.map(async (add) => await getERC20Token(add)))
+  async init({ provider, abi, address, swapRouterFee, swapTokenAddresses, updateMethod = 'polling', user }) {
+    this.tokens = await Promise.all(
+      swapTokenAddresses.map(async (add) => await getERC20Token({ address: add, provider, user })),
+    )
     this.tokenPath = this.tokens.map((token) => token.address)
     // build the list of intermediate pool pairs for the given multi-token path.
     // Pool list length will be 1 less than the token path length, e.g. a token1->token2->token3
@@ -37,11 +40,12 @@ class FlashBorrowToLpSwap {
     try {
       this._factory = new provider.eth.Contract(abi, address)
     } catch (err) {
-      throw new Error('Exception in contract_load')
+      throw new Error(`Exception in contract_load ${err}`)
     }
     for (let i = 0; i < this.tokenPath.length - 1; i++) {
       let pool = await getLiquidityPool({
-        address: this._factory.getPair(this.tokenPath[i], this.tokenPath[i + 1]),
+        provider,
+        address: await this._factory.methods.getPair(this.tokenPath[i], this.tokenPath[i + 1]).call(),
         name: this.tokens[i].symbol + '-' + this.tokens[i + 1].symbol,
         tokens: [this.tokens[i], this.tokens[i + 1]],
         updateMethod: updateMethod,
@@ -98,9 +102,12 @@ class FlashBorrowToLpSwap {
   _calculateArbitrage() {
     //  set up the boundaries for the Brent optimizer based on which token is being borrowed
     let bounds
-    if (this.borrowToken == this.borrowPool.token0.address) {
+    let decimal
+    if (this.borrowToken.address == this.borrowPool.token0.address) {
+      decimal = this.borrowPool.token0.decimals
       bounds = [1, this.borrowPool.reservesToken0]
     } else {
+      decimal = this.borrowPool.token1.decimals
       bounds = [1, this.borrowPool.reservesToken1]
     }
     const func = (x) =>
@@ -108,8 +115,9 @@ class FlashBorrowToLpSwap {
         this.calculateMultipoolTokensOutFromTokensIn({ tokenIn: this.borrowToken, tokenInQuantity: x }) -
         this.borrowPool.calculateTokensInFromTokensOut({ tokenIn: this.repayToken, tokenOutQuantity: x })
       )
-    const bestBorrow = Math.round(brent(func, bounds[0], bounds[1], 0.001, 500))
-
+    const opt = localMinimum(func, bounds[0], bounds[1], 1, 500)
+    const bestBorrow = Math.round(opt.xmin)
+    console.log(opt)
     let borrowAmounts
     if (this.borrowToken.address == this.borrowPool.token0.address) {
       borrowAmounts = [bestBorrow, 0]
@@ -124,7 +132,8 @@ class FlashBorrowToLpSwap {
       tokenOutQuantity: bestBorrow,
     })
 
-    const bestProfit = -func(bestBorrow)
+    const bestProfit = -opt.fmin
+    console.log({ bestProfit })
     // only save opportunities with rational, positive values
     if (bestBorrow > 0 && bestProfit > 0) {
       this.best = {
@@ -219,12 +228,12 @@ export const getFlashBorrowToLpSwap = async ({
   swapTokenAddresses,
   swapRouterFee,
   name,
+  user,
   updateMethod = 'polling',
 }) => {
   const flashBorrowToLpSwap = new FlashBorrowToLpSwap({
     borrowPool,
     borrowToken,
-    provider,
     swapFactoryAddress,
     swapTokenAddresses,
     swapRouterFee,
@@ -238,6 +247,7 @@ export const getFlashBorrowToLpSwap = async ({
     swapRouterFee,
     swapTokenAddresses,
     updateMethod,
+    user,
   })
   return flashBorrowToLpSwap
 }
