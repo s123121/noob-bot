@@ -180,63 +180,63 @@ const main = async () => {
       telegram.sendMessage(`jackpot found, diff = ${diff}`)
     }
   })
-  while (true) {
-    const isConnected = await wsProvider.isConnected()
-    if (!isConnected) {
-      console.log('Blockchain is not connected, retrying ...')
-    }
-    //   const start = Date.now()
-    //   // for (const arb of arbs) {
-    //   //   await arb.updateReserves({ silent: false, printReserves: false, printRatio: false })
-    //   //   if (arb.best.borrowAmount) {
-    //   //     const arbProfitUsd = (arb.best.profitAmount / 10 ** arb.best.profitToken.decimals) * arb.best.profitToken.price
-    //   //     console.log(
-    //   //       `Borrow ${arb.best.borrowAmount / 10 ** arb.best.borrowToken.decimals} ${arb.best.borrowToken} on ${
-    //   //         arb.borrowPool
-    //   //       }, Profit ${arb.best.profitAmount / 10 ** arb.best.profitToken.decimals} ${
-    //   //         arb.best.profitToken
-    //   //       } (${arbProfitUsd}), Gas {gas_cost_usd} (base: {int(last_base_fee/(10**9))} gwei, priority: {int(MIN_PRIORITY_FEE/10**9)} gwei)`,
-    //   //     )
+  // while (true) {
+  //   const isConnected = await wsProvider.isConnected()
+  //   if (!isConnected) {
+  //     console.log('Blockchain is not connected, retrying ...')
+  //   }
+  //   const start = Date.now()
+  //   // for (const arb of arbs) {
+  //   //   await arb.updateReserves({ silent: false, printReserves: false, printRatio: false })
+  //   //   if (arb.best.borrowAmount) {
+  //   //     const arbProfitUsd = (arb.best.profitAmount / 10 ** arb.best.profitToken.decimals) * arb.best.profitToken.price
+  //   //     console.log(
+  //   //       `Borrow ${arb.best.borrowAmount / 10 ** arb.best.borrowToken.decimals} ${arb.best.borrowToken} on ${
+  //   //         arb.borrowPool
+  //   //       }, Profit ${arb.best.profitAmount / 10 ** arb.best.profitToken.decimals} ${
+  //   //         arb.best.profitToken
+  //   //       } (${arbProfitUsd}), Gas {gas_cost_usd} (base: {int(last_base_fee/(10**9))} gwei, priority: {int(MIN_PRIORITY_FEE/10**9)} gwei)`,
+  //   //     )
 
-    //   //     console.log(`LP Path: ${arb.swapPoolAddresses}`)
-    //   //     console.log(`Borrow Amount: ${arb.best.borrowAmount}`)
-    //   //     console.log(`Borrow Amounts: ${arb.best.borrowPoolAmounts}`)
-    //   //     console.log(`Repay Amount: ${arb.best.repayAmount}`)
-    //   //     console.log(`Swap Amounts: ${arb.best.swapPoolAmounts}`)
-    //   //     if (arbProfitUsd > MIN_PROFIT_USD && !DRY_RUN) {
-    //   //       console.log('executing arb')
-    //   //       try {
-    //   //         // arbContract.flashBorrowToLpSwap(
-    //   //         //   arb.borrowPool.address,
-    //   //         //   arb.best.borrowPoolAmounts,
-    //   //         //   arb.best.repayAmount,
-    //   //         //   arb.swapPoolAddresses,
-    //   //         //   arb.best.swapPoolAmounts,
-    //   //         //   { from: degenbot.address },
-    //   //         // )
-    //   //       } catch (err) {
-    //   //         console.error(err)
-    //   //       }
-    //   //       break
-    //   //     }
-    //   //   }
-    //   // }
-    //   // try {
-    //   //   wbnb.getPrice()
-    //   // } catch (err) {
-    //   //   console.log(`(price update) Exception: ${err}`)
-    //   // }
-    //   const end = Date.now()
+  //   //     console.log(`LP Path: ${arb.swapPoolAddresses}`)
+  //   //     console.log(`Borrow Amount: ${arb.best.borrowAmount}`)
+  //   //     console.log(`Borrow Amounts: ${arb.best.borrowPoolAmounts}`)
+  //   //     console.log(`Repay Amount: ${arb.best.repayAmount}`)
+  //   //     console.log(`Swap Amounts: ${arb.best.swapPoolAmounts}`)
+  //   //     if (arbProfitUsd > MIN_PROFIT_USD && !DRY_RUN) {
+  //   //       console.log('executing arb')
+  //   //       try {
+  //   //         // arbContract.flashBorrowToLpSwap(
+  //   //         //   arb.borrowPool.address,
+  //   //         //   arb.best.borrowPoolAmounts,
+  //   //         //   arb.best.repayAmount,
+  //   //         //   arb.swapPoolAddresses,
+  //   //         //   arb.best.swapPoolAmounts,
+  //   //         //   { from: degenbot.address },
+  //   //         // )
+  //   //       } catch (err) {
+  //   //         console.error(err)
+  //   //       }
+  //   //       break
+  //   //     }
+  //   //   }
+  //   // }
+  //   // try {
+  //   //   wbnb.getPrice()
+  //   // } catch (err) {
+  //   //   console.log(`(price update) Exception: ${err}`)
+  //   // }
+  //   const end = Date.now()
 
-    //   if (end - start >= LOOP_TIME) {
-    //     continue
-    //   } else {
-    //     const sleepTime = LOOP_TIME - (end - start)
-    //     console.log(`Sleeping for ${sleepTime} seconds`)
-    //     await new Promise((resolve) => setTimeout(resolve, sleepTime))
-    //     continue
-    //   }
-  }
+  //   if (end - start >= LOOP_TIME) {
+  //     continue
+  //   } else {
+  //     const sleepTime = LOOP_TIME - (end - start)
+  //     console.log(`Sleeping for ${sleepTime} seconds`)
+  //     await new Promise((resolve) => setTimeout(resolve, sleepTime))
+  //     continue
+  //   }
+  // }
 }
 
 main()

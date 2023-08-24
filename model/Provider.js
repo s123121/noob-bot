@@ -15,7 +15,10 @@ class Provider {
     console.log('Blockchain Connecting ...')
     const provider = new Web3.providers.WebsocketProvider(`${this.url}`)
 
-    provider.on('error', (err) => console.log('Error: ', err))
+    provider.on('error', (err) => {
+      console.log('Error: ', err)
+      throw err
+    })
     provider.on('connect', () => console.log('Blockchain Connected ...'))
     provider.on('end', (err) => console.log('Blockchain Connection Closed ...', err))
 
@@ -25,7 +28,6 @@ class Provider {
   /**
    * Checks the status of connection
    *
-   * @return {Boolean} - Resolves to true or false
    */
   async isConnected() {
     if (this.web3) {
