@@ -1,6 +1,6 @@
 import 'dotenv/config'
 import axios from 'axios'
-import Web3 from 'web3'
+import { Web3 } from 'web3'
 import HDWalletProvider from '@truffle/hdwallet-provider'
 
 const provider = new HDWalletProvider({

@@ -1,6 +1,6 @@
 import 'dotenv/config'
 import axios from 'axios'
-import Web3 from 'web3'
+import { Web3 } from 'web3'
 import HDWalletProvider from '@truffle/hdwallet-provider'
 import { getERC20Token } from '../model/ERC20.js'
 import { getLiquidityPool } from '../uniswap/v2/LiquidityPool.js'
@@ -26,7 +26,7 @@ const BISWAP_POOL_CONTRACT_ADDRESS = '0x8840C6252e2e86e545deFb6da98B2a0E26d8C1BA
 // const PANCAKE_FACTORY_CONTRACT_ADDRESS = '0x9Ad6C38BE94206cA50bb0d90783181662f0Cfa10'
 const SUSHISWAP_FACTORY_CONTRACT_ADDRESS = '0xc35DADB65012eC5796536bD9864eD8773aBc74C4'
 const BISWAP_FACTORY_CONTRACT_ADDRESS = '0x858E3312ed3A876947EA49d572A7C42DE08af7EE'
-const LOOP_TIME = 1000
+const LOOP_TIME = 5000
 
 const MIN_PROFIT_USD = 1.0
 
@@ -44,6 +44,8 @@ const options = {
   clientConfig: {
     keepalive: true,
     keepaliveInterval: 60000, // milliseconds
+    dropConnectionOnKeepaliveTimeout: true,
+    keepaliveGracePeriod: 4000,
   },
   reconnect: {
     auto: true,
@@ -52,7 +54,7 @@ const options = {
     onTimeout: true,
   },
 }
-const wsProvider = new Provider(CHAINSTACK_WS)
+const wsProvider = new Provider(CHAINSTACK_WS, options)
 wsProvider.connect()
 
 const web3 = new Web3(bscProvider)
@@ -73,7 +75,7 @@ const getAccount = async () => {
 const startListening = async (pool1, pool2) => {
   const subscription = await wsProvider.web3.eth.subscribe('logs', {
     address: [SUSHISWAP_POOL_CONTRACT_ADDRESS, BISWAP_POOL_CONTRACT_ADDRESS],
-    topics: ['0x1c411e9a96e071241c2f21f7726b17ae89e3cab4c78be50e062b03a9fffbbad1'], // Sync Event
+    // topics: ['0x1c411e9a96e071241c2f21f7726b17ae89e3cab4c78be50e062b03a9fffbbad1'], // Sync Event
   })
   telegram.sendMessage(`Start monitoring: WBNB-USDT`)
   subscription.on('error', (err) => {
@@ -98,6 +100,7 @@ const startListening = async (pool1, pool2) => {
       telegram.sendMessage(`jackpot found, diff = ${diff}`)
     }
   })
+  return subscription
 }
 
 const main = async () => {
@@ -134,8 +137,8 @@ const main = async () => {
     fee: 0.003,
   })
 
-  const sushiFactoryAbi = await getAbi(SUSHISWAP_FACTORY_CONTRACT_ADDRESS)
-  const biswapFactoryAbi = await getAbi(BISWAP_FACTORY_CONTRACT_ADDRESS)
+  // const sushiFactoryAbi = await getAbi(SUSHISWAP_FACTORY_CONTRACT_ADDRESS)
+  // const biswapFactoryAbi = await getAbi(BISWAP_FACTORY_CONTRACT_ADDRESS)
 
   // const sushi_wbnb_to_biswap = await getFlashBorrowToLpSwap({
   //   provider: web3,
@@ -188,6 +191,7 @@ const main = async () => {
   while (true) {
     const start = Date.now()
     const isConnected = await wsProvider.isConnected()
+    console.log({ isConnected })
     if (!isConnected) {
       console.log('Blockchain is not connected, retrying ...')
       startListening(sushiswap_lp_wbnb_usdt, biswap_lp_wbnb_usdt)

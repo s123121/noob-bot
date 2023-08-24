@@ -1,5 +1,5 @@
 import 'dotenv/config'
-import Web3 from 'web3'
+import { Web3 } from 'web3'
 import HDWalletProvider from '@truffle/hdwallet-provider'
 import ERC20 from '../model/ERC20.js'
 import Router from '../uniswap/v2/Router.js'

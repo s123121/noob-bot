@@ -1,4 +1,4 @@
-import Web3 from 'web3'
+import { Web3 } from 'web3'
 class Provider {
   constructor(url) {
     this.url = url
@@ -13,7 +13,7 @@ class Provider {
    */
   connect() {
     console.log('Blockchain Connecting ...')
-    const provider = new Web3.providers.WebsocketProvider(`${this.url}`)
+    const provider = new Web3.providers.WebsocketProvider(this.url)
 
     provider.on('error', (err) => {
       console.log('Error: ', err)
@@ -21,6 +21,7 @@ class Provider {
     })
     provider.on('connect', () => console.log('Blockchain Connected ...'))
     provider.on('end', (err) => console.log('Blockchain Connection Closed ...', err))
+    provider.on('disconnect', (err) => console.log('Blockchain Connection Closed ...', err))
 
     this.web3 = new Web3(provider)
   }
