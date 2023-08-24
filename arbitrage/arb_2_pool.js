@@ -26,17 +26,18 @@ const BISWAP_POOL_CONTRACT_ADDRESS = '0x8840C6252e2e86e545deFb6da98B2a0E26d8C1BA
 // const PANCAKE_FACTORY_CONTRACT_ADDRESS = '0x9Ad6C38BE94206cA50bb0d90783181662f0Cfa10'
 const SUSHISWAP_FACTORY_CONTRACT_ADDRESS = '0xc35DADB65012eC5796536bD9864eD8773aBc74C4'
 const BISWAP_FACTORY_CONTRACT_ADDRESS = '0x858E3312ed3A876947EA49d572A7C42DE08af7EE'
-const LOOP_TIME = 500
+const LOOP_TIME = 1000
 
 const MIN_PROFIT_USD = 1.0
 
 const QUICK_NODE_API = `https://autumn-damp-star.bsc.discover.quiknode.pro/${process.env.QUICK_NODE_API_KEY}`
 const QUICK_NODE_WS = `wss://autumn-damp-star.bsc.discover.quiknode.pro/${process.env.QUICK_NODE_API_KEY}`
 const CHAINSTACK_API = `https://bsc-mainnet.core.chainstack.com/${process.env.CHAINSTACK_KEY}`
+const CHAINSTACK_WS = `wss://bsc-mainnet.core.chainstack.com/ws/${process.env.CHAINSTACK_KEY}`
 
 const bscProvider = new HDWalletProvider({
   mnemonic: process.env.MNEMONIC,
-  providerOrUrl: QUICK_NODE_API,
+  providerOrUrl: CHAINSTACK_API,
 })
 
 const options = {
@@ -51,7 +52,7 @@ const options = {
     onTimeout: true,
   },
 }
-const wsProvider = new Provider(QUICK_NODE_WS)
+const wsProvider = new Provider(CHAINSTACK_WS)
 wsProvider.connect()
 
 const web3 = new Web3(bscProvider)
@@ -67,6 +68,36 @@ const getAbi = async (address) => {
 const getAccount = async () => {
   const accounts = await web3.eth.getAccounts()
   return accounts[0]
+}
+
+const startListening = async (pool1, pool2) => {
+  const subscription = await wsProvider.web3.eth.subscribe('logs', {
+    address: [SUSHISWAP_POOL_CONTRACT_ADDRESS, BISWAP_POOL_CONTRACT_ADDRESS],
+    topics: ['0x1c411e9a96e071241c2f21f7726b17ae89e3cab4c78be50e062b03a9fffbbad1'], // Sync Event
+  })
+  telegram.sendMessage(`Start monitoring: WBNB-USDT`)
+  subscription.on('error', (err) => {
+    console.log('Error: ', err)
+    throw err
+  })
+  subscription.on('data', async (log) => {
+    if (log.address === SUSHISWAP_POOL_CONTRACT_ADDRESS) {
+      await pool1.updateReserves({ silent: true })
+    } else if (log.address === BISWAP_POOL_CONTRACT_ADDRESS) {
+      await pool2.updateReserves({ silent: true })
+    }
+    const sushiRatio = pool1.getPoolRatio()
+    const biswapRatio = pool2.getPoolRatio()
+    const ratio1 = sushiRatio['USDT-WBNB']
+    const ratio2 = biswapRatio['USDT-WBNB']
+    console.log(`SushiSwap Pool Ratio: ${ratio1}`)
+    console.log(`BiSwap Pool Ratio: ${ratio2}`)
+    const diff = Math.abs((ratio1 - ratio2) / ratio1)
+    if (diff > 0.01) {
+      console.log('jackpot found, diff = ', diff)
+      telegram.sendMessage(`jackpot found, diff = ${diff}`)
+    }
+  })
 }
 
 const main = async () => {
@@ -153,90 +184,65 @@ const main = async () => {
   // const arbs = [sushi_wbnb_to_biswap, biswap_wbnb_to_sushi]
 
   // wbnb.getPrice()
-  const subscription = await wsProvider.web3.eth.subscribe('logs', {
-    address: [SUSHISWAP_POOL_CONTRACT_ADDRESS, BISWAP_POOL_CONTRACT_ADDRESS],
-    topics: ['0x1c411e9a96e071241c2f21f7726b17ae89e3cab4c78be50e062b03a9fffbbad1'], // Sync Event
-  })
-  telegram.sendMessage(`Start monitoring: WBNB-USDT`)
-  subscription.on('error', (err) => {
-    console.log('Error: ', err)
-    throw err
-  })
-  subscription.on('data', async (log) => {
-    if (log.address === SUSHISWAP_POOL_CONTRACT_ADDRESS) {
-      await sushiswap_lp_wbnb_usdt.updateReserves({ silent: true })
-    } else if (log.address === BISWAP_POOL_CONTRACT_ADDRESS) {
-      await biswap_lp_wbnb_usdt.updateReserves({ silent: true })
+  startListening(sushiswap_lp_wbnb_usdt, biswap_lp_wbnb_usdt)
+  while (true) {
+    const start = Date.now()
+    const isConnected = await wsProvider.isConnected()
+    if (!isConnected) {
+      console.log('Blockchain is not connected, retrying ...')
+      startListening(sushiswap_lp_wbnb_usdt, biswap_lp_wbnb_usdt)
     }
-    const sushiRatio = sushiswap_lp_wbnb_usdt.getPoolRatio()
-    const biswapRatio = biswap_lp_wbnb_usdt.getPoolRatio()
-    const ratio1 = sushiRatio['USDT-WBNB']
-    const ratio2 = biswapRatio['USDT-WBNB']
-    console.log(`SushiSwap Pool Ratio: ${ratio1}`)
-    console.log(`BiSwap Pool Ratio: ${ratio2}`)
-    const diff = Math.abs((ratio1 - ratio2) / ratio1)
-    if (diff > 0.01) {
-      console.log('jackpot found, diff = ', diff)
-      telegram.sendMessage(`jackpot found, diff = ${diff}`)
+    //   // for (const arb of arbs) {
+    //   //   await arb.updateReserves({ silent: false, printReserves: false, printRatio: false })
+    //   //   if (arb.best.borrowAmount) {
+    //   //     const arbProfitUsd = (arb.best.profitAmount / 10 ** arb.best.profitToken.decimals) * arb.best.profitToken.price
+    //   //     console.log(
+    //   //       `Borrow ${arb.best.borrowAmount / 10 ** arb.best.borrowToken.decimals} ${arb.best.borrowToken} on ${
+    //   //         arb.borrowPool
+    //   //       }, Profit ${arb.best.profitAmount / 10 ** arb.best.profitToken.decimals} ${
+    //   //         arb.best.profitToken
+    //   //       } (${arbProfitUsd}), Gas {gas_cost_usd} (base: {int(last_base_fee/(10**9))} gwei, priority: {int(MIN_PRIORITY_FEE/10**9)} gwei)`,
+    //   //     )
+
+    //   //     console.log(`LP Path: ${arb.swapPoolAddresses}`)
+    //   //     console.log(`Borrow Amount: ${arb.best.borrowAmount}`)
+    //   //     console.log(`Borrow Amounts: ${arb.best.borrowPoolAmounts}`)
+    //   //     console.log(`Repay Amount: ${arb.best.repayAmount}`)
+    //   //     console.log(`Swap Amounts: ${arb.best.swapPoolAmounts}`)
+    //   //     if (arbProfitUsd > MIN_PROFIT_USD && !DRY_RUN) {
+    //   //       console.log('executing arb')
+    //   //       try {
+    //   //         // arbContract.flashBorrowToLpSwap(
+    //   //         //   arb.borrowPool.address,
+    //   //         //   arb.best.borrowPoolAmounts,
+    //   //         //   arb.best.repayAmount,
+    //   //         //   arb.swapPoolAddresses,
+    //   //         //   arb.best.swapPoolAmounts,
+    //   //         //   { from: degenbot.address },
+    //   //         // )
+    //   //       } catch (err) {
+    //   //         console.error(err)
+    //   //       }
+    //   //       break
+    //   //     }
+    //   //   }
+    //   // }
+    //   // try {
+    //   //   wbnb.getPrice()
+    //   // } catch (err) {
+    //   //   console.log(`(price update) Exception: ${err}`)
+    //   // }
+    const end = Date.now()
+
+    if (end - start >= LOOP_TIME) {
+      continue
+    } else {
+      const sleepTime = LOOP_TIME - (end - start)
+      console.log(`Sleeping for ${sleepTime} seconds`)
+      await new Promise((resolve) => setTimeout(resolve, sleepTime))
+      continue
     }
-  })
-  // while (true) {
-  //   const isConnected = await wsProvider.isConnected()
-  //   if (!isConnected) {
-  //     console.log('Blockchain is not connected, retrying ...')
-  //   }
-  //   const start = Date.now()
-  //   // for (const arb of arbs) {
-  //   //   await arb.updateReserves({ silent: false, printReserves: false, printRatio: false })
-  //   //   if (arb.best.borrowAmount) {
-  //   //     const arbProfitUsd = (arb.best.profitAmount / 10 ** arb.best.profitToken.decimals) * arb.best.profitToken.price
-  //   //     console.log(
-  //   //       `Borrow ${arb.best.borrowAmount / 10 ** arb.best.borrowToken.decimals} ${arb.best.borrowToken} on ${
-  //   //         arb.borrowPool
-  //   //       }, Profit ${arb.best.profitAmount / 10 ** arb.best.profitToken.decimals} ${
-  //   //         arb.best.profitToken
-  //   //       } (${arbProfitUsd}), Gas {gas_cost_usd} (base: {int(last_base_fee/(10**9))} gwei, priority: {int(MIN_PRIORITY_FEE/10**9)} gwei)`,
-  //   //     )
-
-  //   //     console.log(`LP Path: ${arb.swapPoolAddresses}`)
-  //   //     console.log(`Borrow Amount: ${arb.best.borrowAmount}`)
-  //   //     console.log(`Borrow Amounts: ${arb.best.borrowPoolAmounts}`)
-  //   //     console.log(`Repay Amount: ${arb.best.repayAmount}`)
-  //   //     console.log(`Swap Amounts: ${arb.best.swapPoolAmounts}`)
-  //   //     if (arbProfitUsd > MIN_PROFIT_USD && !DRY_RUN) {
-  //   //       console.log('executing arb')
-  //   //       try {
-  //   //         // arbContract.flashBorrowToLpSwap(
-  //   //         //   arb.borrowPool.address,
-  //   //         //   arb.best.borrowPoolAmounts,
-  //   //         //   arb.best.repayAmount,
-  //   //         //   arb.swapPoolAddresses,
-  //   //         //   arb.best.swapPoolAmounts,
-  //   //         //   { from: degenbot.address },
-  //   //         // )
-  //   //       } catch (err) {
-  //   //         console.error(err)
-  //   //       }
-  //   //       break
-  //   //     }
-  //   //   }
-  //   // }
-  //   // try {
-  //   //   wbnb.getPrice()
-  //   // } catch (err) {
-  //   //   console.log(`(price update) Exception: ${err}`)
-  //   // }
-  //   const end = Date.now()
-
-  //   if (end - start >= LOOP_TIME) {
-  //     continue
-  //   } else {
-  //     const sleepTime = LOOP_TIME - (end - start)
-  //     console.log(`Sleeping for ${sleepTime} seconds`)
-  //     await new Promise((resolve) => setTimeout(resolve, sleepTime))
-  //     continue
-  //   }
-  // }
+  }
 }
 
 main()
