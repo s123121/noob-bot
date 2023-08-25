@@ -92,9 +92,9 @@ class LiquidityPoolV2 {
       this._contract.methods.token1().call(),
     ])
     for (const token of this.tokens) {
-      if (token.address === tokenAddresses[0]) {
+      if (token.address === tokenAddresses[0].toLowerCase()) {
         this.token0 = token
-      } else if (token.address === tokenAddresses[1]) {
+      } else if (token.address === tokenAddresses[1].toLowerCase()) {
         this.token1 = token
       } else {
         throw new Error(`${token.name} not found in pool ${this.name}`)
