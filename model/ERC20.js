@@ -5,7 +5,7 @@ import { strict as assert } from 'node:assert'
 class ERC20Token {
   //     Represents an ERC-20 token. Must be initialized with an address.
   constructor({ address, user, provider, abi, oracleAddress = null }) {
-    this.address = address
+    this.address = address.toLowerCase()
     this._user = user
     this._web3 = provider
     if (abi) {

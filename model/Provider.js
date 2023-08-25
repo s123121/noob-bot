@@ -11,7 +11,7 @@ class Provider {
   /**
    * Connects to web3 and then sets proper handlers for events
    */
-  connect() {
+  connect({ onConnect, onDisconnect, onError }) {
     console.log('Blockchain Connecting ...')
     const provider = new Web3.providers.WebsocketProvider(this.url)
 
@@ -19,9 +19,18 @@ class Provider {
       console.log('Error: ', err)
       throw err
     })
-    provider.on('connect', () => console.log('Blockchain Connected ...'))
-    provider.on('end', (err) => console.log('Blockchain Connection Closed ...', err))
-    provider.on('disconnect', (err) => console.log('Blockchain Connection Closed ...', err))
+    provider.on('connect', () => {
+      console.log('Blockchain Connected ...')
+      if (onConnect) onConnect()
+    })
+    provider.on('error', (err) => {
+      console.log('Blockchain Connection Closed ...', err)
+      if (onError) onError(err)
+    })
+    provider.on('disconnect', (err) => {
+      console.log('Blockchain Connection Closed ...', err)
+      if (onDisconnect) onDisconnect(err)
+    })
 
     this.web3 = new Web3(provider)
   }

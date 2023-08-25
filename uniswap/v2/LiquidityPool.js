@@ -14,6 +14,7 @@ class LiquidityPoolV2 {
     fee = 0.003,
     feeToken0,
     feeToken1,
+    stateBlock,
   }) {
     /** 
       Create a new `LiquidityPool` object for interaction with a Uniswap
@@ -62,7 +63,7 @@ class LiquidityPoolV2 {
           Fetch initial state values from the chain at a particular block
           height. Defaults to the latest block if omitted.
     **/
-    this.address = address
+    this.address = address.toLowerCase()
     this.name = name
     this.router = router
     this._update_method = updateMethod
@@ -70,12 +71,15 @@ class LiquidityPoolV2 {
     this._filter_active = false
     this.abi = abi
     this.tokens = tokens
+    this._web3 = provider
     this._contract = new provider.eth.Contract(abi, address)
     this.token0MaxSwap = 0
     this.token1MaxSwap = 0
     this.feeToken0 = feeToken0 || fee
     this.feeToken1 = feeToken1 || fee
     this.fee = this.feeToken0 && this.feeToken1 ? 0 : fee
+    this.newReserves = false
+    this.updateBlock = stateBlock || 0
 
     if (tokens.length !== 2) {
       throw new Error(`Expected 2 tokens, found ${tokens.length}`)
@@ -230,9 +234,31 @@ class LiquidityPoolV2 {
     }
   }
 
-  async updateReserves({ silent, printReserves, printRatio }) {
+  async updateReserves({ silent, printReserves, printRatio, isExternal, externalToken0, externalToken1, updateBlock }) {
     let success = false
-    if (this._update_method === 'polling') {
+    if (isExternal) {
+      assert(
+        externalToken0 && externalToken1 && updateBlock,
+        'externalToken0 and externalToken1 and updateBlock must be provided',
+      )
+      // discard stale updates, but allow updating the same pool multiple times per block (necessary if sending sync events individually)
+      if (updateBlock < this.updateBlock) {
+        throw new Error(
+          `Current state recorded at block ${this.updateBlock}, received update for stale block ${updateBlock}`,
+        )
+      } else {
+        this.updateBlock = updateBlock
+      }
+      if (externalToken0 == this.reservesToken0 && externalToken1 == this.reservesToken1) {
+        this.newReserves = false
+        success = false
+      } else {
+        this.reservesToken0 = externalToken0
+        this.reservesToken1 = externalToken1
+        this.newReserves = true
+        success = true
+      }
+    } else if (this._update_method === 'polling') {
       try {
         const reserves = await this._contract.methods.getReserves().call()
         const reservesToken0 = reserves['0']
@@ -240,32 +266,32 @@ class LiquidityPoolV2 {
         if (reservesToken0 !== this.reservesToken0 || reservesToken1 !== this.reservesToken1) {
           this.reservesToken0 = Number(reservesToken0)
           this.reservesToken1 = Number(reservesToken1)
-          if (!silent) {
-            console.log(`[${this.name}]`)
-            if (printReserves) {
-              console.log(`${this.token0.name}: ${this.reservesToken0}`)
-              console.log(`${this.token1.name}: ${this.reservesToken1}`)
-            }
-            if (printRatio) {
-              console.log(
-                `${this.token0.name}/${this.token1.name}: ${
-                  this.reservesToken0 / 10 ** this.token0.decimals / (this.reservesToken1 / 10 ** this.token1.decimals)
-                }`,
-              )
-              console.log(
-                `${this.token1.name}/${this.token0.name}: ${
-                  this.reservesToken1 / 10 ** this.token1.decimals / (this.reservesToken0 / 10 ** this.token0.decimals)
-                }`,
-              )
-            }
-            this.calculateTokensInAtRatioOut()
-            success = true
-          }
+          this.calculateTokensInAtRatioOut()
+          success = true
         } else {
           success = false
         }
       } catch (err) {
         throw new Error(`LiquidityPool: Exception in update_reserves (polling): ${err?.message}`)
+      }
+    }
+    if (!silent) {
+      console.log(`[${this.name}]`)
+      if (printReserves) {
+        console.log(`${this.token0.name}: ${this.reservesToken0}`)
+        console.log(`${this.token1.name}: ${this.reservesToken1}`)
+      }
+      if (printRatio) {
+        console.log(
+          `${this.token0.name}/${this.token1.name}: ${
+            this.reservesToken0 / 10 ** this.token0.decimals / (this.reservesToken1 / 10 ** this.token1.decimals)
+          }`,
+        )
+        console.log(
+          `${this.token1.name}/${this.token0.name}: ${
+            this.reservesToken1 / 10 ** this.token1.decimals / (this.reservesToken0 / 10 ** this.token0.decimals)
+          }`,
+        )
       }
     }
 

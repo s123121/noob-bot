@@ -3,7 +3,7 @@ import { uniswapV2RouterAbi } from '../../abi/index.js'
 class Router {
   // Represents a Uniswap V2 router contract
   constructor({ address, name, provider, abi = uniswapV2RouterAbi, user }) {
-    this.address = address
+    this.address = address.toLowerCase()
     this.name = name
     this._contract = new provider.eth.Contract(abi, address)
     if (user) {
