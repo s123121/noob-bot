@@ -2,7 +2,7 @@ import { oracleAbi } from '../abi/index.js'
 
 class ChainlinkPriceContract {
   constructor({ address, provider }) {
-    this._address = address.toLowerCase()
+    this._address = provider.utils.toChecksumAddress(address)
     this._contract = new provider.eth.Contract(oracleAbi, this._address)
   }
 

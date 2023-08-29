@@ -63,7 +63,7 @@ class LiquidityPoolV2 {
           Fetch initial state values from the chain at a particular block
           height. Defaults to the latest block if omitted.
     **/
-    this.address = address.toLowerCase()
+    this.address = provider.utils.toChecksumAddress(address)
     this.name = name
     this.router = router
     this._update_method = updateMethod
@@ -92,9 +92,9 @@ class LiquidityPoolV2 {
       this._contract.methods.token1().call(),
     ])
     for (const token of this.tokens) {
-      if (token.address === tokenAddresses[0].toLowerCase()) {
+      if (token.address === tokenAddresses[0]) {
         this.token0 = token
-      } else if (token.address === tokenAddresses[1].toLowerCase()) {
+      } else if (token.address === tokenAddresses[1]) {
         this.token1 = token
       } else {
         throw new Error(`${token.name} not found in pool ${this.name}`)

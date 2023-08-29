@@ -19,7 +19,7 @@ const WBNB_CHAINLINK_PRICE_FEED_ADDRESS = '0x0567f2323251f0aab15c8dfb1967e4e8a7d
 const USDT_CONTRACT_ADDRESS = '0x55d398326f99059fF775485246999027B3197955'
 const WBNB_CONTRACT_ADDRESS = '0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c'
 
-// const PANCAKE_POOL_CONTRACT_ADDRESS = '0x36696169C63e42cd08ce11f5deeBbCeBae652050'
+const PANCAKE_POOL_CONTRACT_ADDRESS = '0x16b9a82891338f9bA80E2D6970FddA79D1eb0daE'
 const SUSHISWAP_POOL_CONTRACT_ADDRESS = '0x2905817b020fd35d9d09672946362b62766f0d69'
 const BISWAP_POOL_CONTRACT_ADDRESS = '0x8840C6252e2e86e545deFb6da98B2a0E26d8C1BA'
 
@@ -84,27 +84,27 @@ const startListening = async (pools, provider) => {
     const eventReserve = web3.eth.abi.decodeParameters(['uint112', 'uint112'], log.data)
     const eventBlock = Number(log.blockNumber)
     const eventAddress = log.address
-    const index = pools.findIndex((pool) => pool.address.toLowerCase() === eventAddress.toLowerCase())
-    if (index >= 0) {
-      await pools[index].updateReserves({
+    const currentPool = pools.find((pool) => pool.address === web3.utils.toChecksumAddress(eventAddress))
+    const othersPool = pools.filter((pool) => pool.address !== web3.utils.toChecksumAddress(eventAddress))
+    if (currentPool) {
+      await currentPool.updateReserves({
         silent: true,
         isExternal: true,
         externalToken0: Number(eventReserve['0']),
         externalToken1: Number(eventReserve['1']),
         updateBlock: eventBlock,
       })
-    }
-    const sushiRatio = pools[0].getPoolRatio()
-    const biswapRatio = pools[1].getPoolRatio()
-    const ratio1 = sushiRatio['USDT-WBNB']
-    const ratio2 = biswapRatio['USDT-WBNB']
-    console.log(`SushiSwap Pool Ratio: ${ratio1}`)
-    console.log(`BiSwap Pool Ratio: ${ratio2}`)
-    const diff = Math.abs((ratio1 - ratio2) / ratio1)
-    console.log('diff = ', diff)
-    if (diff > 0.01) {
-      console.log('jackpot found, diff = ', diff)
-      telegram.sendMessage(`jackpot found, diff = ${diff}`)
+      const currentPoolRatio = currentPool.getPoolRatio()['USDT-WBNB']
+      console.log(`currentPoolRatio(${currentPool.name}) = `, currentPoolRatio)
+      for (const pool of othersPool) {
+        const ratio = pool.getPoolRatio()['USDT-WBNB']
+        const diff = Math.abs((currentPoolRatio - ratio) / currentPoolRatio)
+        console.log(`diff with(${pool.name}) = `, diff)
+        if (diff > 0.01) {
+          console.log('jackpot found, diff = ', diff)
+          telegram.sendMessage(`jackpot found, diff(${currentPool.name}-${pool.name}) = ${diff}`)
+        }
+      }
     }
   })
   return subscription
@@ -138,6 +138,15 @@ const main = async () => {
   const biswap_lp_wbnb_usdt = await getLiquidityPool({
     address: BISWAP_POOL_CONTRACT_ADDRESS,
     name: 'Biswap',
+    tokens: [wbnb, usdt],
+    provider: web3,
+    updateMethod: UPDATE_METHOD,
+    fee: 0.003,
+  })
+
+  const pancakeswap_lp_wbnb_usdt = await getLiquidityPool({
+    address: PANCAKE_POOL_CONTRACT_ADDRESS,
+    name: 'PancakeSwap',
     tokens: [wbnb, usdt],
     provider: web3,
     updateMethod: UPDATE_METHOD,
@@ -196,7 +205,10 @@ const main = async () => {
   // wbnb.getPrice()
   const wsProvider = new Provider(CHAINSTACK_WS, options)
   telegram.sendMessage(`Start monitoring: WBNB-USDT`)
-  wsProvider.connect({ onConnect: () => startListening([sushiswap_lp_wbnb_usdt, biswap_lp_wbnb_usdt], wsProvider) })
+  wsProvider.connect({
+    onConnect: () =>
+      startListening([sushiswap_lp_wbnb_usdt, biswap_lp_wbnb_usdt, pancakeswap_lp_wbnb_usdt], wsProvider),
+  })
   // while (true) {
   //   const start = Date.now()
   //   const isConnected = await wsProvider.isConnected()
